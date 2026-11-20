@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ذكرياتي</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{--bg:#eef0f6;--surface:#fff;--ink:#1c2340;--muted:#6a7090;--line:#d9dcea;--accent:#2f4fd8;--accent-ink:#fff;--warn:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#12162b;--surface:#1b2140;--ink:#eceefb;--muted:#9aa1c7;--line:#2c3460;--accent:#8aa2ff;--accent-ink:#10163a;--warn:#ff8a80}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Naskh Arabic","Segoe UI",Tahoma,sans-serif;font-size:17px;line-height:1.7}
+main{max-width:640px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:2.4rem;margin:8px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px}
+button,input,textarea{font:inherit;color:inherit}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:12px;padding:10px 18px;font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--warn);border:1px solid var(--warn)}
+.bar{display:flex;gap:10px;margin-bottom:16px}
+.bar input{flex:1;min-width:0}
+input[type=text],input[type=date],textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+textarea{min-height:130px;resize:vertical}
+#form{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:20px;display:none}
+#form.open{display:block}
+#form label{display:block;font-weight:500;margin:10px 0 4px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin-top:10px}
+.it{position:relative}
+.thumbs img,.vbox{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font-size:2rem}
+.rm{position:absolute;top:4px;left:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.7);color:#fff;cursor:pointer}
+.row,.acts{display:flex;gap:10px;margin-top:12px}
+.mem{background:var(--surface);border-right:5px solid var(--accent);border-radius:6px 16px 16px 6px;padding:14px 16px;margin-bottom:16px}
+.mem h2{margin:0;font-size:1.25rem}
+.date{color:var(--muted);font-size:.9rem}
+.mem p{white-space:pre-wrap;margin:8px 0}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin:10px 0}
+.photos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:12px;cursor:pointer;background:var(--line)}
+.photos video{grid-column:1/-1;width:100%;max-height:360px;border-radius:12px;background:#000}
+.vbtn{grid-column:1/-1}
+.empty{text-align:center;color:var(--muted);padding:40px 10px}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9;padding:12px}
+#lb.open{display:flex}
+#lb img{max-width:100%;max-height:100%;border-radius:8px}
+.err{color:var(--warn);min-height:1.5em}
+</style>
+</head>
+<body>
+<main>
+  <h1>ذكرياتي</h1>
+
+  <section id="login">
+    <p class="sub">سجّل دخولك بجوجل عشان ذكرياتك تتحفظ في Google Drive بتاعك.</p>
+    <button class="btn" id="go">تسجيل الدخول بجوجل</button>
+    <div id="lmsg" class="err" role="status"></div>
+  </section>
+
+  <section id="app" hidden>
+    <p class="sub" id="status"></p>
+    <div class="bar">
+      <input type="text" id="q" placeholder="دوّر في ذكرياتك" aria-label="بحث">
+      <button class="btn" id="add">ذكرى جديدة</button>
+    </div>
+
+    <section id="form">
+      <label for="t">العنوان</label>
+      <input type="text" id="t">
+      <label for="d">التاريخ</label>
+      <input type="date" id="d">
+      <label for="x">اكتب اللي فاكره</label>
+      <textarea id="x"></textarea>
+      <label for="f">الصور والفيديوهات</label>
+      <input type="file" id="f" accept="image/*,video/*" multiple>
+      <div class="thumbs" id="th"></div>
+      <div id="msg" class="err" role="status"></div>
+      <div class="row">
+        <button class="btn" id="save">حفظ الذكرى</button>
+        <button class="btn ghost" id="cancel">إلغاء</button>
+      </div>
+    </section>
+
+    <div id="list"></div>
+    <button class="btn ghost" id="more" hidden>عرض المزيد</button>
+    <div class="row"><button class="btn ghost" id="out">تسجيل خروج</button></div>
+  </section>
+</main>
+<div id="lb"><img alt=""></div>
+
+<script>
+(function(){
+var CLIENT_ID="ضع_الـ_CLIENT_ID_هنا";
+var SCOPE="https://www.googleapis.com/auth/drive.file";
+var D="https://www.googleapis.com/drive/v3/files",U="https://www.googleapis.com/upload/drive/v3/files";
+var $=function(i){return document.getElementById(i)};
+var token=null,tc=null,folderId=null,dataId=null,items=[],shown=20,cache={};
+var editId=null,keepP=[],keepV=[],newP=[],newV=[],gone=[];
+
+function refresh(){return new Promise(function(res,rej){tc.callback=function(r){if(r.error)rej(r);else{token=r.access_token;res()}};tc.requestAccessToken({prompt:""})})}
+function api(url,opt,retry){
+  var o=Object.assign({},opt);
+  o.headers=Object.assign({},(opt||{}).headers,{Authorization:"Bearer "+token});
+  return fetch(url,o).then(function(r){
+    if(r.status===401&&!retry)return refresh().then(function(){return api(url,opt,true)});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    return r;
+  });
+}
+function qs(s){return D+"?fields=files(id,name)&q="+encodeURIComponent(s)}
+function createFile(name,blob){
+  var type=blob.type||"application/octet-stream";
+  return api(U+"?uploadType=resumable",{method:"POST",headers:{"Content-Type":"application/json; charset=UTF-8","X-Upload-Content-Type":type},body:JSON.stringify({name:name,parents:[folderId]})})
+  .then(function(r){return api(r.headers.get("Location"),{method:"PUT",headers:{"Content-Type":type},body:blob})})
+  .then(function(r){return r.json()}).then(function(j){return j.id});
+}
+function saveJson(){
+  return api(U+"/"+dataId+"?uploadType=media",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:items})});
+}
+function ensure(){
+  return api(qs("name='ذكرياتي' and mimeType='application/vnd.google-apps.folder' and trashed=false")).then(function(r){return r.json()}).then(function(j){
+    if(j.files.length)return j.files[0].id;
+    return api(D,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:"ذكرياتي",mimeType:"application/vnd.google-apps.folder"})}).then(function(r){return r.json()}).then(function(j){return j.id});
+  }).then(function(fid){
+    folderId=fid;
+    return api(qs("name='memories.json' and '"+fid+"' in parents and trashed=false")).then(function(r){return r.json()}).then(function(j){
+      if(j.files.length){dataId=j.files[0].id;return api(D+"/"+dataId+"?alt=media").then(function(r){return r.json()})}
+      return createFile("memories.json",new Blob(['{"items":[]}'],{type:"application/json"})).then(function(id){dataId=id;return {items:[]}});
+    });
+  });
+}
+function getUrl(id){
+  if(!cache[id])cache[id]=api(D+"/"+id+"?alt=media").then(function(r){return r.blob()}).then(function(b){return URL.createObjectURL(b)});
+  return cache[id];
+}
+function shrink(f){
+  return new Promise(function(res){
+    var u=URL.createObjectURL(f),im=new Image();
+    im.onload=function(){
+      var s=Math.min(1,1600/Math.max(im.width,im.height)),c=document.createElement("canvas");
+      c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);
+      c.getContext("2d").drawImage(im,0,0,c.width,c.height);
+      URL.revokeObjectURL(u);c.toBlob(function(b){res(b)},"image/jpeg",.85);
+    };
+    im.onerror=function(){res(null)};
+    im.src=u;
+  });
+}
+function today(){var n=new Date(),p=function(v){return String(v).padStart(2,"0")};return n.getFullYear()+"-"+p(n.getMonth()+1)+"-"+p(n.getDate())}
+function fmt(s){try{return new Date(s+"T12:00:00").toLocaleDateString("ar-EG",{year:"numeric",month:"long",day:"numeric"})}catch(e){return s}}
+
+function render(){
+  var term=$("q").value.trim().toLowerCase();
+  var list=items.filter(function(m){return !term||((m.title||"")+" "+(m.text||"")).toLowerCase().indexOf(term)>-1})
+    .sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:b.id-a.id});
+  var box=$("list");box.innerHTML="";
+  $("more").hidden=list.length<=shown;
+  if(!list.length){var e=document.createElement("div");e.className="empty";e.textContent=items.length?"مفيش ذكرى بالاسم ده.":"لسه مفيش ذكريات. دوس على «ذكرى جديدة» وابدأ.";box.appendChild(e);return}
+  list.slice(0,shown).forEach(function(m){
+    var a=document.createElement("article");a.className="mem";
+    var h=document.createElement("h2");h.textContent=m.title||"بدون عنوان";
+    var d=document.createElement("div");d.className="date";d.textContent=fmt(m.date);
+    a.appendChild(h);a.appendChild(d);
+    if(m.text){var p=document.createElement("p");p.textContent=m.text;a.appendChild(p)}
+    var g=document.createElement("div");g.className="photos";
+    (m.photos||[]).forEach(function(id){
+      var i=document.createElement("img");i.alt="صورة من الذكرى";
+      getUrl(id).then(function(u){i.src=u;i.onclick=function(){$("lb").firstElementChild.src=u;$("lb").classList.add("open")}}).catch(function(){});
+      g.appendChild(i);
+    });
+    (m.videos||[]).forEach(function(id){
+      var vb=document.createElement("button");vb.className="btn ghost vbtn";vb.textContent="▶ تشغيل الفيديو";
+      vb.onclick=function(){
+        vb.disabled=true;vb.textContent="بحمّل الفيديو...";
+        getUrl(id).then(function(u){var v=document.createElement("video");v.controls=true;v.playsInline=true;v.src=u;g.replaceChild(v,vb);v.play().catch(function(){})})
+        .catch(function(){vb.disabled=false;vb.textContent="فشل التحميل، دوس تاني"});
+      };
+      g.appendChild(vb);
+    });
+    if(g.children.length)a.appendChild(g);
+    var acts=document.createElement("div");acts.className="acts";
+    var eb=document.createElement("button");eb.className="btn ghost";eb.textContent="تعديل";
+    eb.onclick=function(){startEdit(m)};
+    var b=document.createElement("button");b.className="btn danger";b.textContent="حذف";
+    b.onclick=function(){
+      if(!b.dataset.sure){b.dataset.sure="1";b.textContent="تأكيد الحذف";setTimeout(function(){b.dataset.sure="";b.textContent="حذف"},4000);return}
+      b.disabled=true;
+      items=items.filter(function(z){return z.id!==m.id});
+      saveJson().then(function(){(m.photos||[]).concat(m.videos||[]).forEach(function(id){api(D+"/"+id,{method:"DELETE"}).catch(function(){})});render()})
+      .catch(function(){items.push(m);b.disabled=false;b.textContent="فشل الحذف"});
+    };
+    acts.appendChild(eb);acts.appendChild(b);a.appendChild(acts);box.appendChild(a);
+  });
+}
+
+function showThumbs(){
+  var th=$("th");th.innerHTML="";
+  function add(el,fn){var w=document.createElement("div");w.className="it";w.appendChild(el);var r=document.createElement("button");r.type="button";r.className="rm";r.textContent="✕";r.setAttribute("aria-label","شيل");r.onclick=fn;w.appendChild(r);th.appendChild(w)}
+  function img(src){var i=document.createElement("img");i.alt="";if(src.then)src.then(function(u){i.src=u});else i.src=src;return i}
+  function vb(){var d=document.createElement("div");d.className="vbox";d.textContent="🎬";return d}
+  keepP.forEach(function(id,k){add(img(getUrl(id)),function(){gone.push(id);keepP.splice(k,1);showThumbs()})});
+  newP.forEach(function(b,k){add(img(URL.createObjectURL(b)),function(){newP.splice(k,1);showThumbs()})});
+  keepV.forEach(function(id,k){add(vb(),function(){gone.push(id);keepV.splice(k,1);showThumbs()})});
+  newV.forEach(function(f,k){add(vb(),function(){newV.splice(k,1);showThumbs()})});
+  $("f").value="";
+}
+function resetForm(){editId=null;keepP=[];keepV=[];newP=[];newV=[];gone=[];$("msg").textContent=""}
+function startEdit(m){
+  resetForm();editId=m.id;keepP=(m.photos||[]).slice();keepV=(m.videos||[]).slice();
+  $("t").value=m.title||"";$("d").value=m.date||today();$("x").value=m.text||"";
+  showThumbs();$("form").classList.add("open");window.scrollTo(0,0);
+}
+function closeForm(){$("form").classList.remove("open");$("t").value="";$("x").value="";resetForm();showThumbs()}
+
+function start(){
+  $("login").hidden=true;$("app").hidden=false;$("status").textContent="بحمّل ذكرياتك من درايف...";
+  ensure().then(function(j){items=j.items||[];$("status").textContent="ذكرياتك محفوظة في Google Drive بتاعك.";render()})
+  .catch(function(){$("status").textContent="مقدرتش أفتح الدرايف. اتأكد من النت وجرّب تاني."});
+}
+
+function init(){
+  if(!window.google||!google.accounts){$("lmsg").textContent="مقدرتش أحمّل تسجيل الدخول بجوجل. اتأكد من النت.";return}
+  tc=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPE,callback:function(r){
+    if(r.error){$("lmsg").textContent="فشل تسجيل الدخول: "+r.error;return}
+    token=r.access_token;start();
+  }});
+  $("go").onclick=function(){
+    if(CLIENT_ID.indexOf(".apps.googleusercontent.com")<0){$("lmsg").textContent="لازم تحط الـ Client ID في الكود الأول.";return}
+    tc.requestAccessToken({prompt:""});
+  };
+}
+window.addEventListener("load",init);
+
+$("add").onclick=function(){resetForm();showThumbs();$("d").value=today();$("form").classList.add("open");$("t").focus()};
+$("cancel").onclick=closeForm;
+$("q").oninput=function(){shown=20;render()};
+$("more").onclick=function(){shown+=20;render()};
+$("lb").onclick=function(){$("lb").classList.remove("open")};
+$("out").onclick=function(){if(token&&window.google)google.accounts.oauth2.revoke(token,function(){location.reload()});else location.reload()};
+
+$("f").addEventListener("change",function(){
+  var all=Array.prototype.slice.call($("f").files);
+  var imgs=all.filter(function(z){return z.type.indexOf("video")!==0});
+  newV=newV.concat(all.filter(function(z){return z.type.indexOf("video")===0}));
+  $("msg").textContent=imgs.length?"بجهّز الصور...":"";
+  Promise.all(imgs.map(shrink)).then(function(r){newP=newP.concat(r.filter(Boolean));$("msg").textContent="";showThumbs()});
+});
+
+$("save").onclick=function(){
+  var t=$("t").value.trim(),x=$("x").value.trim();
+  if(!t&&!x&&!keepP.length&&!keepV.length&&!newP.length&&!newV.length){$("msg").textContent="اكتب حاجة أو ضيف صورة الأول.";return}
+  var b=$("save");b.disabled=true;
+  var total=newP.length+newV.length,n=0,ph=keepP.slice(),vd=keepV.slice(),chain=Promise.resolve();
+  newP.forEach(function(bl){chain=chain.then(function(){$("msg").textContent="بحمّل "+(++n)+" من "+total;return createFile("صورة-"+Date.now()+".jpg",bl).then(function(id){ph.push(id)})})});
+  newV.forEach(function(f){chain=chain.then(function(){$("msg").textContent="بحمّل "+(++n)+" من "+total;return createFile(f.name||("فيديو-"+Date.now()),f).then(function(id){vd.push(id)})})});
+  chain.then(function(){
+    var o={id:editId||Date.now(),title:t,date:$("d").value||today(),text:x,photos:ph,videos:vd};
+    items=items.filter(function(z){return z.id!==o.id});items.push(o);
+    return saveJson();
+  }).then(function(){
+    gone.forEach(function(id){api(D+"/"+id,{method:"DELETE"}).catch(function(){})});
+    closeForm();render();
+  }).catch(function(){$("msg").textContent="الحفظ فشل. اتأكد من النت وجرّب تاني."})
+  .then(function(){b.disabled=false});
+};
+})();
+</script>
+</body>
+  </html>
